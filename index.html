@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>圣诞快乐！ | Merry Christmas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        body {
+            background: #000000; /* 黑色背景 */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .tree-title {
+            color: #ffffff;
+            font-size: 32px;
+            font-family: "Great Vibes", cursive;
+            text-shadow: 0 0 8px rgba(255,255,255,0.8);
+            z-index: 20; /* 最上层 */
+            position: relative;
+            margin-top: 10px;
+        }
+
+        /* GIF图层降低，放在雪花后面 */
+        .tree-gif {
+            height: 100vh;
+            width: auto;
+            max-width: 100vw;
+            box-shadow: none;
+            z-index: 10; /* 低于雪花的15，实现圣诞树在后 */
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            object-fit: contain;
+        }
+
+        .tree-footer {
+            color: #ffffff;
+            font-size: 16px;
+            font-family: cursive;
+            text-shadow: 0 0 5px rgba(255,255,255,0.5);
+            z-index: 20; /* 最上层 */
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        /* 雪花图层提高，放在圣诞树前面 */
+        .snowflake {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            opacity: 0.7;
+            box-shadow: 0 0 6px white;
+            pointer-events: none;
+            animation: fall linear infinite;
+            z-index: 15; /* 高于GIF的10，低于文字的20 */
+        }
+
+        @keyframes fall {
+            0% {
+                top: -10px;
+                transform: translateX(var(--snow-offset, 0px));
+            }
+            100% {
+                top: 100vh;
+                transform: translateX(var(--snow-offset, 0px));
+            }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+</head>
+<body>
+    <h1 class="tree-title">Merry Christmas</h1>
+    <img src="christmas_tree_animation.gif" alt="旋转圣诞树动画" class="tree-gif">
+    <p class="tree-footer">点击页面授权后，扭转手机控制雪花方向</p>
+
+    <script>
+        let snowOffset = 0;
+        let allSnowflakes = [];
+        let hasPermission = false;
+        // 8个固定轨迹对应的偏移量（对应0°、45°、90°、135°、180°、225°、270°、315°/360°）
+        const angleOffsetMap = [0, 40, 80, 40, 0, -40, -80, -40];
+        // 角度稳定计时相关变量
+        let currentStableX = 0; // 当前稳定的x轴加速度（替代角度，兼容重力感应）
+        let xChangeTime = Date.now(); // 上次x轴加速度变化的时间
+        let currentTrackIndex = 0; // 当前使用的轨迹索引（0-7对应8条轨迹）
+
+        function createSnowflakes() {
+            const snowCount = 100;
+            const body = document.querySelector('body');
+            allSnowflakes = [];
+            for (let i = 0; i < snowCount; i++) {
+                const snow = document.createElement('div');
+                snow.classList.add('snowflake');
+                const size = Math.random() * 3 + 1;
+                snow.style.width = snow.style.height = `${size}px`;
+                snow.style.left = `${Math.random() * 100}vw`;
+                snow.style.animationDuration = `${Math.random() * 12 + 8}s`;
+                snow.style.animationDelay = `${Math.random() * 10}s`;
+                body.appendChild(snow);
+                allSnowflakes.push(snow);
+            }
+        }
+
+        function monitorPhoneOrientation() {
+            // 替换为 DeviceMotionEvent 检测（兼容所有国产浏览器）
+            if (!window.DeviceMotionEvent) {
+                alert("你的浏览器不支持设备感应，请更新浏览器");
+                return;
+            }
+
+            function requestPermission() {
+                // 适配 DeviceMotionEvent 权限请求
+                const requestFunc = DeviceMotionEvent.requestPermission;
+                if (requestFunc) {
+                    requestFunc()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                hasPermission = true;
+                                startListening();
+                            } else {
+                                alert("你拒绝了设备感应权限");
+                            }
+                        })
+                        .catch(err => {
+                            console.error("权限请求失败：", err);
+                            alert("权限请求失败，请手动开启");
+                        });
+                } else {
+                    // 非 iOS 13+ 浏览器，直接监听
+                    hasPermission = true;
+                    startListening();
+                }
+            }
+
+            function startListening() {
+                window.addEventListener('devicemotion', function(event) {
+                    if (!hasPermission || !event.accelerationIncludingGravity) return;
+
+                    // 高灵敏度获取x轴加速度（对应手机左右倾斜，替代设备角度，灵敏度更高）
+                    const xAcceleration = Math.round(event.accelerationIncludingGravity.x * 10) / 10; // 保留1位小数，提高灵敏度
+                    
+                    // 1. 高灵敏度反馈：x轴加速度变化即更新临时偏移
+                    const xDiff = Math.abs(xAcceleration - currentStableX);
+                    if (xDiff > 0.1) { // 微小变化即触发（高灵敏度，用户瞬间感知）
+                        currentStableX = xAcceleration;
+                        xChangeTime = Date.now(); // 重置稳定计时
+
+                        // 临时匹配轨迹，实时更新雪花位置
+                        const tempX = Math.max(-10, Math.min(10, currentStableX)); // 限制x轴范围
+                        const tempTrackIndex = Math.floor(((tempX + 10) / 20) * 8) % 8; // 映射到8条轨迹
+                        snowOffset = angleOffsetMap[tempTrackIndex];
+                        allSnowflakes.forEach(snow => {
+                            snow.style.setProperty('--snow-offset', `${snowOffset}px`);
+                        });
+                    }
+
+                    // 2. 3秒稳定后，锁定固定轨迹
+                    const now = Date.now();
+                    if (now - xChangeTime >= 3000) { // 角度（加速度）保持3秒以上
+                        const stableX = Math.max(-10, Math.min(10, currentStableX));
+                        currentTrackIndex = Math.floor(((stableX + 10) / 20) * 8) % 8; // 匹配8条固定轨迹
+                        snowOffset = angleOffsetMap[currentTrackIndex];
+                        allSnowflakes.forEach(snow => {
+                            snow.style.setProperty('--snow-offset', `${snowOffset}px`);
+                        });
+                    }
+                }, true);
+            }
+
+            document.addEventListener('click', function() {
+                if (!hasPermission) {
+                    requestPermission();
+                }
+            }, { once: true });
+        }
+
+        window.onload = function() {
+            createSnowflakes();
+            monitorPhoneOrientation();
+        };
+    </script>
+</body>
+</html>
